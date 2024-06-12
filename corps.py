@@ -618,13 +618,13 @@ def global_loop(data_source,epochs):
             print(rep_geo[f'{data_set}'])
             nom+=f'+{a0}'
         train_dataloader,data_shape_source,dates=data_loading_source(data_source)
-        
+        n_dom=8
         n_classes=11
         dim_ff=64
         data_shape=(data_shape_source[0],data_shape_source[2],data_shape_source[1])
         config={'emb_size':64,'num_heads':8,'Data_shape':data_shape,'Fix_pos_encode':'tAPE','Rel_pos_encode':'eRPE','dropout':0.2,'dim_ff':dim_ff}
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        model = ConvTranRD(config,n_classes,dates).to(device)
+        model = ConvTranRD(config,n_classes,n_dom,dates).to(device)
 
 
 
@@ -679,22 +679,26 @@ def global_loop(data_source,epochs):
                 joint_embedding = torch.concat([inv_emb, spec_emb_d])
 
                 #mixdl_loss_supContraLoss = sim_dist_specifc_loss_spc(joint_embedding, y_mix_labels, dom_mix_labels, scl, epoch)# k*(d+1) 
-                mixdl_loss_supContraLoss = sup_contra_Cplus2_classes(joint_embedding, y_mix_labels, dom_mix_labels, scl, epoch)
+                #mixdl_loss_supContraLoss = sup_contra_Cplus2_classes(joint_embedding, y_mix_labels, dom_mix_labels, scl, epoch)
+                inv_emb_norm =  nn.functional.normalize(inv_emb)
                 
+                spec_emb_norm = nn.functional.normalize(spec_emb_d)
+               
+                ortho_loss = torch.mean(torch.sum(inv_emb_norm*spec_emb_norm,dim=1))
 
 
 
 
-                contra_loss = mixdl_loss_supContraLoss
+                #contra_loss = mixdl_loss_supContraLoss
 
                 ####################################
 
-                loss = loss_fn(pred, y_batch) + contra_loss + loss_ce_spec_dom + loss_avd_dom
+                loss = loss_fn(pred, y_batch)  + loss_ce_spec_dom + loss_avd_dom +ortho_loss
 
                 loss.backward() # backward pass: backpropagate the prediction loss
                 optimizer.step() # gradient descent: adjust the parameters by the gradients collected in the backward pass
                 tot_loss+= loss.cpu().detach().numpy()
-                contra_tot_loss+= contra_loss.cpu().detach().numpy()
+                #contra_tot_loss+= contra_loss.cpu().detach().numpy()
                 den+=1.
 
 
@@ -702,7 +706,7 @@ def global_loop(data_source,epochs):
             #pred_valid, labels_valid = evaluation(model, valid_dataloader, device)
             #f1_val = f1_score(labels_valid, pred_valid, average="weighted")
             #if f1_val > valid_f1:
-            torch.save(model.state_dict(), f"model_REFeD_8{nom}.pth")
+            #torch.save(model.state_dict(), f"model_REFeD_8{nom}.pth")                          #### !!!!!!!!!!!!!!!!!!!!!
                 #valid_f1 = f1_val
                 #pred_test, labels_test = evaluation(model, test_dataloader, device)
                 #f1 = f1_score(labels_test, pred_test, average="weighted")
@@ -721,13 +725,14 @@ def test_loop(modèle,data_target):
       test_dataloader,target_data,_=data_loading_target(data_target)
       pred_test, labels_test = evaluation(modèle, test_dataloader, device)
       f1 = f1_score(labels_test, pred_test, average="weighted")
+      print(f1)
       return f1
 
 
 
 
 def final_test(listes_données,epochs):
-  dict_refed8={}
+  dict_reda={}
   rep_geo={f'{R2018}':'R18',f'{R2019}':'R19',f'{R2020}':'R20',f'{T2018}':'T18',f'{T2019}':'T19',f'{T2020}':'T20',f'{L2018}':'L18',f'{L2019}':'L19',f'{L2020}':'L20'}
   jeu_test=list(combinations(listes_données,8))
   #jeu_filtré=[elem for elem in jeu_test if rep_geo[f'{elem[0]}'][0]==rep_geo[f'{elem[1]}'][0]  ]
@@ -748,15 +753,16 @@ def final_test(listes_données,epochs):
       modèle=global_loop(jeu,epochs)
     
       a2=f'{test}'
-      dict_refed8[f'test {rep_geo[a2]}']= test_loop(modèle,test)
-      with open('dict_refed8','wb') as f :
-        pickle.dump(dict_refed8,f)
-  return dict_refed8
+      dict_reda[f'test {rep_geo[a2]}']= test_loop(modèle,test)
+      with open('dict_reda','wb') as f :
+        pickle.dump(dict_reda,f)
+  return dict_reda
 
 liste_data=[R2018,R2019,R2020,L2018,L2019,L2020,T2018,T2019,T2020]
 
-dict_refed_8=final_test(liste_data,100)
-print(dict_refed_8)
+dict_reda=final_test(liste_data,1)
+print(dict_reda)
+
 
 
 
